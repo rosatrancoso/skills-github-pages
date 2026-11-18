@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IPMA Station Meteogram</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1118;--panel:#111b25;--line:#243442;--muted:#93a6b5;--text:#e8f0f5;--accent:#61dfc0}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 88% -10%,#18354a 0,transparent 42%),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+.shell{max-width:1280px;padding:32px 22px 48px;margin:auto}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:24px}
+.eyebrow{color:var(--accent);font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase}
+h1{margin:5px 0 4px;font-size:clamp(26px,4vw,38px);letter-spacing:-.04em;line-height:1.15}
+.subtitle{margin:0;color:var(--muted)}
+.live{display:flex;align-items:center;gap:8px;border:1px solid #28483f;background:#11231f;color:#9fe6d2;border-radius:999px;padding:7px 11px;font-size:12px;white-space:nowrap}
+.dot{width:7px;height:7px;background:var(--accent);border-radius:50%;box-shadow:0 0 12px var(--accent)}
+.toolbar{display:grid;grid-template-columns:minmax(240px,1fr) auto;gap:14px;align-items:end;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
+label{display:block;color:var(--muted);font-size:12px;margin:0 0 7px}
+select,button{height:42px;border:1px solid #304352;border-radius:9px;background:#0d1720;color:var(--text);font:inherit;padding:0 12px}
+select{width:100%}
+button{cursor:pointer;font-weight:650;transition:.15s}
+button:hover{border-color:var(--accent);color:var(--accent)}
+button:disabled{opacity:.5;cursor:wait}
+.station-meta{color:var(--muted);font-size:12px;margin-top:7px}
+.status{min-height:22px;color:var(--muted);font-size:12px;margin:10px 2px 16px}
+.status.error{color:#ff9c9c}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:15px}
+.card,.chart-card,.table-panel{background:var(--panel);border:1px solid var(--line);border-radius:15px}
+.card{min-height:100px;padding:14px 16px}
+.card-label{color:var(--muted);font-size:12px}
+.card-value{font-size:27px;font-weight:650;letter-spacing:-.04em;margin-top:5px}
+.card-unit{font-size:13px;color:var(--muted);font-weight:500;letter-spacing:0}
+.card-note{color:#738896;font-size:11px}
+.section-title{display:flex;justify-content:space-between;align-items:end;gap:15px;margin:23px 2px 12px}
+h2{font-size:17px;margin:0;letter-spacing:-.02em}
+.section-note,.panel-sub{color:var(--muted);font-size:12px}
+.charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.chart-card{padding:14px 16px 8px;min-width:0}
+.chart-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.chart-head h3{font-size:14px;margin:0;font-weight:650}
+.unit{font-size:11px;color:var(--muted)}
+.chart-wrap{height:205px;position:relative;margin-top:5px}
+canvas{width:100%;height:100%;display:block}
+.tooltip{position:absolute;display:none;pointer-events:none;z-index:2;background:#071018;border:1px solid #385064;border-radius:8px;padding:7px 9px;font-size:12px;box-shadow:0 8px 24px #0008;white-space:nowrap}
+.table-panel{margin-top:15px;overflow:hidden}
+.table-head{padding:15px 17px;display:flex;justify-content:space-between;border-bottom:1px solid var(--line)}
+.table-wrap{overflow:auto;max-height:280px}
+table{width:100%;border-collapse:collapse;min-width:670px;font-size:13px}
+th,td{padding:9px 14px;text-align:right;border-bottom:1px solid #1e2b36}
+th{position:sticky;top:0;background:#14202b;color:var(--muted);font-weight:550;font-size:11px}
+th:first-child,td:first-child{text-align:left}
+tbody tr:hover{background:#172530}
+.empty{color:var(--muted);text-align:center!important;padding:24px}
+footer{margin-top:16px;color:#718493;font-size:11px;display:flex;justify-content:space-between;gap:12px}
+footer a{color:#9ab5c7}
+@media(max-width:760px){.shell{padding:24px 14px 38px}.cards{grid-template-columns:repeat(2,1fr)}.charts{grid-template-columns:1fr}.chart-wrap{height:210px}}
+@media(max-width:460px){header{flex-direction:column}.toolbar{grid-template-columns:1fr}.section-title{align-items:flex-start;flex-direction:column}.card-value{font-size:24px}}
+</style>
+</head>
+<body>
+<main class="shell">
+<header>
+  <div><div class="eyebrow">IPMA · Portugal</div><h1>Station meteogram</h1><p class="subtitle">All available hourly measurements for one selected station.</p></div>
+  <div class="live"><span class="dot"></span> Live data</div>
+</header>
+
+<section class="toolbar" aria-label="Dashboard controls">
+  <div>
+    <label for="station">Weather station</label>
+    <select id="station" disabled><option>Loading stations…</option></select>
+    <div id="stationMeta" class="station-meta">Fetching station locations from IPMA</div>
+  </div>
+  <button id="refresh" type="button" disabled>↻ &nbsp;Refresh data</button>
+</section>
+<div id="status" class="status" role="status">Connecting to the IPMA open data API…</div>
+
+<section class="cards" aria-label="Latest station readings">
+  <article class="card"><div class="card-label">Temperature</div><div id="temperature" class="card-value">—</div><div class="card-note">Hourly mean</div></article>
+  <article class="card"><div class="card-label">Precipitation</div><div id="rain" class="card-value">—</div><div class="card-note">Accumulated in the hour</div></article>
+  <article class="card"><div class="card-label">Wind speed</div><div id="wind" class="card-value">—</div><div class="card-note">At 10 m above ground</div></article>
+  <article class="card"><div class="card-label">Humidity</div><div id="humidity" class="card-value">—</div><div class="card-note">Relative humidity</div></article>
+</section>
+
+<div class="section-title">
+  <div><h2 id="stationTitle">Hourly observations</h2><div id="timeNote" class="section-note">Times are shown in your local timezone.</div></div>
+  <div id="dataCount" class="section-note"></div>
+</div>
+<section id="charts" class="charts" aria-label="Meteogram charts"></section>
+
+<section class="table-panel">
+  <div class="table-head"><h2>Recent observations</h2><span class="panel-sub">Most recent first · up to 24 hours</span></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Observation time</th><th>Temperature</th><th>Rain</th><th>Wind</th><th>Humidity</th><th>Pressure</th><th>Radiation</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="7" class="empty">Waiting for observations…</td></tr></tbody>
+  </table></div>
+</section>
+<footer>
+  <span>Source: <a href="https://api.ipma.pt/" target="_blank" rel="noreferrer">IPMA open data API</a>. Missing values are omitted from charts.</span>
+  <span id="updated"></span>
+</footer>
+</main>
+<script>
+(() => {
+  const STATIONS_URL="https://api.ipma.pt/open-data/observation/meteorology/stations/stations.json";
+  const OBS_URL="https://api.ipma.pt/open-data/observation/meteorology/stations/observations.json";
+  const $=id=>document.getElementById(id);
+  const stationSelect=$("station");
+  let stations=[],observations={},activeStation=null,charts=[];
+  const specs=[
+    {key:"temperatura",label:"Air temperature",unit:"°C",color:"#61dfc0"},
+    {key:"precAcumulada",label:"Hourly precipitation",unit:"mm",color:"#80baff"},
+    {key:"intensidadeVentoKM",label:"Wind speed",unit:"km/h",color:"#ffbd73"},
+    {key:"humidade",label:"Relative humidity",unit:"%",color:"#c5a4ff"},
+    {key:"pressao",label:"Atmospheric pressure",unit:"hPa",color:"#fb8da1"},
+    {key:"radiacao",label:"Solar radiation",unit:"kJ/m²",color:"#f3db75"}
+  ];
+  const usable=v=>v!==undefined&&v!==null&&Number.isFinite(Number(v))&&Number(v)>-99;
+  const fmt=(v,d=1)=>usable(v)?Number(v).toFixed(d):"—";
+  const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  function setStatus(s,error=false){$("status").textContent=s;$("status").classList.toggle("error",error)}
+  function parseTime(s){return new Date(/Z$|[+-]\d\d:\d\d$/.test(s)?s:s+":00Z")}
+  function labelTime(s,opts={hour:"2-digit",minute:"2-digit"}){const d=parseTime(s);return Number.isNaN(d.getTime())?s:new Intl.DateTimeFormat("en-GB",opts).format(d)}
+  async function loadStations(){
+    const r=await fetch(STATIONS_URL,{cache:"no-store"});
+    if(!r.ok)throw Error("Could not load station list (HTTP "+r.status+").");
+    const data=await r.json();
+    stations=data.map(f=>({id:String(f.properties.idEstacao),name:f.properties.localEstacao||"Station "+f.properties.idEstacao,coords:f.geometry?.coordinates})).sort((a,b)=>a.name.localeCompare(b.name,"pt"));
+    stationSelect.innerHTML="";
+    stations.forEach(s=>{const o=document.createElement("option");o.value=s.id;o.textContent=s.name;stationSelect.appendChild(o)});
+    stationSelect.disabled=false;$("refresh").disabled=false;
+    if(stations.length){activeStation=stations[0].id;stationSelect.value=activeStation;updateMeta();await loadObservations()}
+    else setStatus("IPMA returned no stations.",true);
+  }
+  function updateMeta(){
+    const s=stations.find(x=>x.id===activeStation);if(!s)return;
+    const c=s.coords,coord=c?`${Number(c[1]).toFixed(3)}°, ${Number(c[0]).toFixed(3)}°`:"";
+    $("stationMeta").textContent=`${coord}${coord?" · ":""}Station ID ${s.id}`;
+    $("stationTitle").textContent=s.name;
+  }
+  async function loadObservations(){
+    $("refresh").disabled=true;setStatus("Fetching the latest hourly observations…");
+    try{
+      const r=await fetch(OBS_URL,{cache:"no-store"});if(!r.ok)throw Error("Could not load observations (HTTP "+r.status+").");
+      observations=await r.json();render();
+      const n=Object.keys(observations).length;
+      setStatus(`Loaded ${n} hourly timestamps from IPMA.`);
+      $("updated").textContent="Fetched "+new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"short"}).format(new Date());
+    }catch(e){setStatus(e.message+" Check your connection and try again.",true)}
+    finally{$("refresh").disabled=false}
+  }
+  function series(){
+    return Object.keys(observations).sort((a,b)=>parseTime(a)-parseTime(b))
+      .map(time=>({time,values:observations[time]?.[activeStation]})).filter(x=>x.values);
+  }
+  function card(id,value,unit,d=1){$(id).innerHTML=usable(value)?`${fmt(value,d)} <span class="card-unit">${unit}</span>`:"—"}
+  function render(){
+    updateMeta();
+    const s=series(),latest=[...s].reverse()[0]?.values||{};
+    card("temperature",latest.temperatura,"°C");
+    card("rain",latest.precAcumulada,"mm");
+    card("wind",latest.intensidadeVentoKM,"km/h");
+    card("humidity",latest.humidade,"%",0);
+    const n=s.reduce((sum,row)=>sum+specs.filter(m=>usable(row.values[m.key])).length,0);
+    $("dataCount").textContent=`${s.length} timestamps · ${n} plotted values`;
+    const host=$("charts");host.innerHTML="";
+    charts=[];
+    for(const m of specs){
+      const article=document.createElement("article");article.className="chart-card";
+      const id="plot-"+m.key;
+      article.innerHTML=`<div class="chart-head"><h3>${m.label}</h3><span class="unit">${m.unit}</span></div><div class="chart-wrap"><canvas id="${id}" aria-label="${m.label} chart"></canvas><div class="tooltip"></div></div>`;
+      host.appendChild(article);
+      const canvas=article.querySelector("canvas"),tooltip=article.querySelector(".tooltip");
+      charts.push({canvas,tooltip,metric:m});
+      canvas.addEventListener("mousemove",e=>showTooltip(e,canvas,tooltip,m));
+      canvas.addEventListener("mouseleave",()=>tooltip.style.display="none");
+    }
+    drawAll(s);
+    $("rows").innerHTML=s.length?[...s].reverse().map(row=>{
+      const v=row.values;
+      return `<tr><td>${esc(labelTime(row.time,{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}))}</td>
+      <td>${fmt(v.temperatura)} °C</td><td>${fmt(v.precAcumulada)} mm</td><td>${fmt(v.intensidadeVentoKM)} km/h</td>
+      <td>${fmt(v.humidade,0)}%</td><td>${fmt(v.pressao)} hPa</td><td>${fmt(v.radiacao)} kJ/m²</td></tr>`;
+    }).join(""):'<tr><td colspan="7" class="empty">No recent readings for this station.</td></tr>';
+  }
+  function drawAll(s){
+    for(const {canvas,metric:m} of charts){
+      const wrap=canvas.parentElement,dpr=Math.max(1,devicePixelRatio||1),w=wrap.clientWidth,h=wrap.clientHeight;
+      canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);
+      const ctx=canvas.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+      const p=s.map(row=>({time:row.time,value:Number(row.values[m.key])})).filter(x=>usable(x.value));
+      const pad={l:51,r:12,t:13,b:32},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
+      if(!p.length){ctx.fillStyle="#93a6b5";ctx.font="12px system-ui";ctx.textAlign="center";ctx.fillText("No data available",w/2,h/2);canvas._points=[];continue}
+      let min=Math.min(...p.map(x=>x.value)),max=Math.max(...p.map(x=>x.value));
+      if(min===max){const d=Math.abs(min)*.1||1;min-=d;max+=d}
+      const extra=(max-min)*.12;min-=extra;max+=extra;
+      const x=i=>pad.l+(p.length===1?cw/2:i*cw/(p.length-1)),y=v=>pad.t+(max-v)/(max-min)*ch;
+      ctx.font="10px system-ui";ctx.lineWidth=1;ctx.textAlign="right";ctx.textBaseline="middle";
+      for(let i=0;i<=3;i++){const yy=pad.t+i*ch/3,val=max-i*(max-min)/3;ctx.strokeStyle="#253541";ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(w-pad.r,yy);ctx.stroke();ctx.fillStyle="#8da1af";ctx.fillText(val.toFixed(1),pad.l-7,yy)}
+      ctx.textAlign="center";ctx.textBaseline="top";
+      const ticks=Math.min(4,p.length);
+      for(let i=0;i<ticks;i++){const idx=ticks===1?0:Math.round(i*(p.length-1)/(ticks-1));ctx.fillStyle="#8da1af";ctx.fillText(labelTime(p[idx].time),x(idx),h-pad.b+10)}
+      const grad=ctx.createLinearGradient(0,pad.t,0,pad.t+ch);grad.addColorStop(0,m.color+"30");grad.addColorStop(1,m.color+"00");
+      ctx.beginPath();p.forEach((pt,i)=>i?ctx.lineTo(x(i),y(pt.value)):ctx.moveTo(x(i),y(pt.value)));
+      ctx.lineTo(x(p.length-1),pad.t+ch);ctx.lineTo(x(0),pad.t+ch);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
+      ctx.beginPath();p.forEach((pt,i)=>i?ctx.lineTo(x(i),y(pt.value)):ctx.moveTo(x(i),y(pt.value)));
+      ctx.strokeStyle=m.color;ctx.lineWidth=2.2;ctx.lineJoin="round";ctx.lineCap="round";ctx.stroke();
+      p.forEach((pt,i)=>{ctx.beginPath();ctx.arc(x(i),y(pt.value),2.8,0,Math.PI*2);ctx.fillStyle="#101b25";ctx.fill();ctx.strokeStyle=m.color;ctx.lineWidth=1.8;ctx.stroke()});
+      canvas._points=p.map((pt,i)=>({x:x(i),y:y(pt.value),pt}));
+    }
+  }
+  function showTooltip(e,canvas,tip,m){
+    const rect=canvas.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top;
+    let near=null,dist=Infinity;
+    for(const point of canvas._points||[]){const d=Math.hypot(point.x-x,point.y-y);if(d<dist){dist=d;near=point}}
+    if(near&&dist<25){
+      tip.style.display="block";
+      tip.innerHTML=`<strong>${esc(labelTime(near.pt.time,{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}))}</strong><br>${near.pt.value.toFixed(1)} ${esc(m.unit)}`;
+      tip.style.left=Math.min(x+10,rect.width-125)+"px";tip.style.top=Math.max(3,y-48)+"px";
+    }else tip.style.display="none";
+  }
+  stationSelect.addEventListener("change",()=>{activeStation=stationSelect.value;render()});
+  $("refresh").addEventListener("click",loadObservations);
+  const observer=new ResizeObserver(()=>drawAll(series()));observer.observe($("charts"));
+  loadStations().catch(e=>setStatus(e.message+" The API may be temporarily unavailable or block this page's origin.",true));
+})();
+</script>
+</body>
+</html>
